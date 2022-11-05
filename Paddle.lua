@@ -35,10 +35,17 @@ WebBanking{
   )
 }
 
-local connection = Connection()
+-- cache the connection object for future script executions
+local connection
+if LocalStorage.connection then
+  connection = LocalStorage.connection
+else
+  connection = Connection()
+  LocalStorage.connection = connection
+end
 
 -- define local functions
-local groupTransactions, parseAmount, parseDate, startTime, tableSum
+local checkSession, groupTransactions, parseAmount, parseDate, startTime, tableSum
 
 -----------------------------------------------------------
 
@@ -47,8 +54,14 @@ function SupportsBank (protocol, bankCode)
 end
 
 function InitializeSession (protocol, bankCode, username, reserved, password)
+  -- if there's an existing connection, check if the session is still active
+  if connection:getCookies() ~= "" and checkSession() then
+    -- no login needed
+    return nil
+  end
+
   -- first authenticate to the API, which sets a cookie
-  local requestBody = JSON():set{email=username, password=password}:json()
+  local requestBody = JSON():set{email=username, password=password, remember=true}:json()
   local responseBody = connection:request(
     "POST",
     "https://api.paddle.com/login",
@@ -77,11 +90,10 @@ function InitializeSession (protocol, bankCode, username, reserved, password)
 
   -- first authentication step (API) has succeeded;
   -- try to request the UI, which redirects a bunch,
-  -- does OAuth magic and sets even more cookies
-  local html = HTML(connection:get(url))
-
-  -- ensure that we are indeed logged in
-  if html:xpath("//*[@class='sb-header__vendor-name']"):length() < 1 then
+  -- does OAuth magic and sets even more cookies;
+  -- at the same time this ensures that the login
+  -- actually worked
+  if checkSession() ~= true then
     -- credentials were correct, but the login still failed for some reason
     return MM.localizeText("The server responded with an internal error. Please try again later.")
   end
@@ -309,10 +321,16 @@ function FetchStatements (accounts, knownIdentifiers)
 end
 
 function EndSession ()
-  connection:get(url .. "logout")
+  -- don't perform a logout as the connection is cached
 end
 
 -----------------------------------------------------------
+
+-- Checks if the auth session is still active
+function checkSession ()
+  local html = HTML(connection:get(url))
+  return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
+end
 
 -- Reduces each group of transactions into one transaction,
 -- appends it to the target table and returns the total
