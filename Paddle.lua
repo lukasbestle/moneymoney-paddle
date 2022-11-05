@@ -26,7 +26,7 @@
 -- SOFTWARE.
 
 WebBanking{
-  version     = 1.00,
+  version     = 1.01,
   url         = "https://vendors.paddle.com/",
   services    = {"Paddle"},
   description = string.format(
