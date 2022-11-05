@@ -44,8 +44,9 @@ else
   LocalStorage.connection = connection
 end
 
--- define local functions
-local checkSession, groupTransactions, parseAmount, parseDate, startTime, tableSum
+-- define local variables and functions
+local email, password
+local checkSession, groupTransactions, login, parseAmount, parseDate, startTime, tableSum
 
 -----------------------------------------------------------
 
@@ -53,53 +54,23 @@ function SupportsBank (protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Paddle"
 end
 
-function InitializeSession (protocol, bankCode, username, reserved, password)
-  -- if there's an existing connection, check if the session is still active
-  if connection:getCookies() ~= "" and checkSession() then
-    -- no login needed
-    return nil
-  end
-
-  -- first authenticate to the API, which sets a cookie
-  local requestBody = JSON():set{email=username, password=password, remember=true}:json()
-  local responseBody = connection:request(
-    "POST",
-    "https://api.paddle.com/login",
-    requestBody,
-    "application/json",
-    {Accept="application/json"}
-  )
-
-  -- check for auth errors
-  local responseData = JSON(responseBody):dictionary()
-  if responseData.error then
-    local errorData = responseData.error
-
-    -- invalid credentials
-    if errorData.code == "forbidden.invalid_credentials" then
-      return LoginFailed
+function InitializeSession2 (protocol, bankCode, step, credentials, interactive)
+  if step == 1 then
+    -- if there's an existing connection, check if the session is still active
+    if connection:getCookies() ~= "" and checkSession() then
+      -- no login needed
+      return nil
     end
 
-    -- other error, return full error
-    return string.format(
-      MM.localizeText("The web server %s responded with the error message:\n»%s«\nPlease try again later."),
-      "api.paddle.com",
-      errorData.status .. ": " .. errorData.code
-    )
+    -- no active session, authenticate with email and password;
+    -- also keep the credentials in variables for the second step
+    email    = credentials[1]
+    password = credentials[2]
+    return login{email=email, password=password}
+  elseif step == 2 then
+    -- authenticate with the provided 2FA code
+    return login{email=email, password=password, code=credentials[1]}
   end
-
-  -- first authentication step (API) has succeeded;
-  -- try to request the UI, which redirects a bunch,
-  -- does OAuth magic and sets even more cookies;
-  -- at the same time this ensures that the login
-  -- actually worked
-  if checkSession() ~= true then
-    -- credentials were correct, but the login still failed for some reason
-    return MM.localizeText("The server responded with an internal error. Please try again later.")
-  end
-
-  -- no error, success
-  return nil
 end
 
 function ListAccounts (knownAccounts)
@@ -369,6 +340,63 @@ function groupTransactions (transactions, types, targetTable)
   end
 
   return pendingBalance
+end
+
+-- Performs the login to the Paddle API
+function login (credentials)
+  -- always request a long session as we will cache it
+  credentials.remember = true
+
+  -- first authenticate to the API, which sets a cookie
+  local requestBody = JSON():set(credentials):json()
+  local responseBody = connection:request(
+    "POST",
+    "https://api.paddle.com/login",
+    requestBody,
+    "application/json",
+    {Accept="application/json"}
+  )
+
+  -- check for auth errors
+  local responseData = JSON(responseBody):dictionary()
+  if responseData.error then
+    local errorData = responseData.error
+
+    -- invalid credentials
+    if errorData.code == "forbidden.invalid_credentials" then
+      return LoginFailed
+    end
+
+    -- account with enabled 2FA
+    if errorData.code == "forbidden.2fa.missing" then
+      -- ask the user for the TOTP code
+      return {
+        title = MM.localizeText("Two-Factor Authentication"),
+        challenge = MM.localizeText("Please enter the code from your mobile phone."),
+        label = MM.localizeText("6-digit code")
+      }
+    end
+
+    -- other error, return full error
+    return string.format(
+      MM.localizeText("The web server %s responded with the error message:\n»%s«\nPlease try again later."),
+      "api.paddle.com",
+      errorData.status .. ": " .. errorData.code
+    )
+  end
+
+  -- first authentication step (API) has succeeded;
+  -- try to request the UI, which redirects a bunch,
+  -- does OAuth magic and sets even more cookies;
+  -- at the same time this ensures that the login
+  -- actually worked
+  if checkSession() ~= true then
+    -- credentials were correct, but the login still failed for some reason
+    return MM.localizeText("The server responded with an internal error. Please try again later.")
+  end
+
+  -- no error, success
+  return nil
 end
 
 -- Extracts a number with optional decimals from a string
