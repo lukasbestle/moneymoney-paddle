@@ -2,8 +2,6 @@
 
 This extension for [MoneyMoney](https://moneymoney-app.com/) retrieves the balance and transactions of [Paddle](https://www.paddle.com) vendor accounts and optionally downloads the payout invoices to the MoneyMoney statements view.
 
-**Note:** Login with two-factor authentication (TOTP) is not supported by this extension as it uses web scraping. If Paddle provides API routes for the balance and payouts some day, the extension can be rewritten to use API keys. Until then, if your main admin account uses TOTP, please create a secondary account with the "Finances" permission.
-
 ## How to use
 
 ### Installation
@@ -11,7 +9,7 @@ This extension for [MoneyMoney](https://moneymoney-app.com/) retrieves the balan
 1. Download the signed extension file of the [latest release](https://github.com/lukasbestle/moneymoney-paddle/releases/latest).
 2. Open the database directory of MoneyMoney as described on the [MoneyMoney website](https://moneymoney-app.com/extensions/).
 3. Place the extension file (`Paddle.lua`) in the `Extensions` directory of your MoneyMoney database.
-4. Add a new account of type "Paddle". You can log in with your credentials for <https://vendors.paddle.com>.
+4. Add a new account of type "Paddle". You can log in with your credentials for <https://vendors.paddle.com>. Paddle accounts with enabled 2FA are supported.
 
 ### Setup account refresh
 
@@ -33,7 +31,7 @@ If you want MoneyMoney to automatically download your Paddle invoices from your 
 
 To keep the size of your MoneyMoney database sane, this option allows to create groups of all similar transactions of the same day. Instead of a single transaction per order, subscription purchase and refund, you will see one transaction for all orders, one for all subscription purchases and one for all refunds of the same day, e.g. like so:
 
-> **5 orders**
+> **5 orders**  
 > Average: 92.57 EUR
 
 To get this behavior, please set the option to `true`. If you prefer to get the original data from Paddle without grouping, set it to `false`.
