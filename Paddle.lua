@@ -45,15 +45,32 @@ else
 end
 
 -- define local variables and functions
+---@type string, string
 local email, password
 local checkSession, groupTransactions, login, parseAmount, parseDate, startTime, tableSum
 
 -----------------------------------------------------------
 
+---**Checks if this extension can request from a specified bank**
+---
+---@param protocol protocol Protocol of the bank gateway
+---@param bankCode string Bank code or service name
+---@return boolean | string `true` or the URL to the online banking entry page if the extension supports the bank, `false` otherwise
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Paddle"
 end
 
+---**Performs the login to the backend with 2FA**
+---
+---If the method returns a `LoginChallenge` object on the first call,
+---it is called a second time with `step=2`.
+---
+---@param protocol protocol Protocol of the bank gateway
+---@param bankCode string Bank code or service name
+---@param step integer Step `1` or `2` of the 2FA
+---@param credentials string[] Username and password on `step=1`, the challenge response on `step=2`
+---@param interactive boolean If MoneyMoney is running in the foreground
+---@return LoginChallenge | LoginFailed | string | nil # 2FA challenge or optional error message
 function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   if step == 1 then
     -- if there's an existing connection, check if the session is still active
@@ -73,6 +90,10 @@ function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   end
 end
 
+---**Returns a list of accounts that can be refreshed with this extension**
+---
+---@param knownAccounts Account[] List of accounts that are already known via FinTS/HBCI
+---@return NewAccount[] | string # List of accounts that can be requsted with web scraping or error message
 function ListAccounts(knownAccounts)
   -- request a month worth of transactions to ensure that there
   -- will be at least one even for smaller accounts;
@@ -100,6 +121,11 @@ function ListAccounts(knownAccounts)
   }
 end
 
+---**Refreshes the balance and transaction of an account**
+---
+---@param account Account Account that is being refreshed
+---@param since timestamp | nil POSIX timestamp of the oldest transaction to return or `nil` for portfolios
+---@return AccountResults | string # Web scraping results or error message
 function RefreshAccount(account, since)
   -- only return transactions if the mode was configured
   if not account.attributes.GroupTransactions then
@@ -114,14 +140,14 @@ function RefreshAccount(account, since)
   end
 
   -- prepare the request for the first page of the balance report
-  local startDate = os.date("%F", startTime(account, since))
+  local startDate = os.date("%F", startTime(account, since --[[@as integer]]))
   local endDate = os.date("%F")
   local url = url .. "report/balance?start_date=" .. startDate .. "&end_date=" .. endDate .. "&narrative=on&action=view"
 
   local balance = 0
   local html
   local pendingBalance = 0
-  local transactions = {}
+  local transactions = {} --[=[@as NewTransaction[]]=]
 
   -- follow the pagination links until there is none
   repeat
@@ -196,10 +222,10 @@ function RefreshAccount(account, since)
   )
 
   -- group transactions of the same day if configured
-  local groupedTransactions = transactions
+  local groupedTransactions = transactions --[=[@as NewTransaction[]]=]
   if account.attributes.GroupTransactions == "true" then
     -- reset the array and build it from scratch with groups
-    groupedTransactions = {}
+    groupedTransactions = {} --[=[@as NewTransaction[]]=]
 
     -- the supported grouping types with human-readable label
     -- (every transaction with different booking text is kept ungrouped)
@@ -215,8 +241,8 @@ function RefreshAccount(account, since)
       SUB_PAY_REFUND_REVERSAL = "subscription payment refund reversal"
     }
 
-    local currentDate
-    local currentTransactions = {}
+    local currentDate --[[@as timestamp]]
+    local currentTransactions = {} --[[@as table<string, table<integer, NewTransaction>>]]
 
     for _, transaction in ipairs(transactions) do
       local transactionDate = os.date("%F", transaction.bookingDate)
@@ -259,13 +285,18 @@ function RefreshAccount(account, since)
   }
 end
 
+---**Fetches PDF statements from the bank**
+---
+---@param accounts Account[] Accounts to download statements for
+---@param knownIdentifiers string[] List of statement identifiers (`statement.identifier`) that have already been downloaded
+---@return StatementResults | string # Downloaded statements or error message
 function FetchStatements(accounts, knownIdentifiers)
   local startDate = startTime(accounts[1], 0)
 
   local html = HTML(connection:get(url .. "payouts/sent"))
 
   -- collect all invoices from all matching payouts
-  local invoices = {}
+  local invoices = {} --[=[@as NewStatement[]]=]
   html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(
     function(_, row)
       local children = row:children()
@@ -300,21 +331,31 @@ function FetchStatements(accounts, knownIdentifiers)
   return { statements = invoices }
 end
 
+---**Performs the logout from the backend**
+---
+---@return string? # Optional error message
 function EndSession()
   -- don't perform a logout as the connection is cached
 end
 
 -----------------------------------------------------------
 
--- Checks if the auth session is still active
+---**Checks if the auth session is still active**
+---
+---@return boolean
 function checkSession()
-  local html = HTML(connection:get(url))
+  local html = HTML(connection:get(url --[[@as string]]))
   return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
 end
 
--- Reduces each group of transactions into one transaction,
--- appends it to the target table and returns the total
--- pending balance of the current day
+---**Reduces each group of transactions into one transaction**
+---
+---The grouped transactions are appended to the target table.
+---
+---@param transactions table<string, table<integer, NewTransaction>> List of transaction groups by booking text
+---@param types table<string, string> Mapping of booking texts to human-readable group names
+---@param targetTable table<integer, NewTransaction> Table to insert the generated transactions to
+---@return number pendingBalance Pending balance of the processed transactions
 function groupTransactions(transactions, types, targetTable)
   local pendingBalance = 0
 
@@ -351,7 +392,10 @@ function groupTransactions(transactions, types, targetTable)
   return pendingBalance
 end
 
--- Performs the login to the Paddle API
+---**Performs the login to the Paddle API**
+---
+---@param credentials { email: string, password: string, code?: string }
+---@return LoginChallenge | LoginFailed | string | nil # 2FA challenge or optional error message
 function login(credentials)
   -- always request a long session as we will cache it
   credentials.remember = true
@@ -408,7 +452,10 @@ function login(credentials)
   return nil
 end
 
--- Extracts a number with optional decimals from a string
+---**Extracts a number with optional decimals from a string**
+---
+---@param amount string
+---@return number? string
 function parseAmount(amount)
   -- extract the actual amount without currency and
   -- remove the thousand separators for number parsing
@@ -417,8 +464,11 @@ function parseAmount(amount)
   return tonumber(amount)
 end
 
--- Extracts an ISO 8601 date (YYYY-MM-DD) from a string
--- and converts it into a POSIX timestamp
+---**Extracts an ISO 8601 date (YYYY-MM-DD) from a string
+---and converts it into a POSIX timestamp**
+---
+---@param date string?
+---@return timestamp?
 function parseDate(date)
   if not date then
     return nil
@@ -429,9 +479,15 @@ function parseDate(date)
   return os.time { year = year, month = month, day = day }
 end
 
--- Returns the provided POSIX timestamp,
--- but limited to the minimum configured start date
--- and at most one year ago
+---**Determines the refresh start time based on the configuration**
+---
+---Returns the provided POSIX timestamp,
+---but limited to the minimum configured start date
+---and at most one year ago.
+---
+---@param account Account
+---@param timestamp timestamp
+---@return timestamp
 function startTime(account, timestamp)
   local oneYearAgo = os.time() - 60 * 60 * 24 * 365
 
@@ -442,8 +498,12 @@ function startTime(account, timestamp)
   )
 end
 
--- Returns the sum of a specific field of
--- all elements of a table
+---**Returns the sum of a specific field of
+---all elements of a table**
+---
+---@param table table<string, any>[]
+---@param field string
+---@return number
 function tableSum(table, field)
   local sum = 0
 
