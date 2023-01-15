@@ -111,11 +111,11 @@ function ListAccounts(knownAccounts)
 
   return {
     {
-      name = "Paddle",
-      owner = html:xpath("//*[@class='sb-header__vendor-name'][1]"):text(),
       accountNumber = string.match(response, 'PaddleVars%.vendor = {"id":(%d+)'),
-      portfolio = false,
       currency = html:xpath("//*[@id='vendor-main']//tbody/tr[1]/td[6]"):text(),
+      name = "Paddle",
+      portfolio = false,
+      owner = html:xpath("//*[@class='sb-header__vendor-name'][1]"):text(),
       type = AccountTypeOther
     }
   }
@@ -166,13 +166,13 @@ function RefreshAccount(account, since)
         end
 
         local transaction = {
-          name = children:get(9):text() .. " " .. children:get(8):text(),
           amount = amount,
-          currency = children:get(7):text(),
           bookingDate = parseDate(children:get(10):text()),
-          purpose = children:get(3):text(),
           bookingText = children:get(2):text(),
-          endToEndReference = children:get(1):text()
+          currency = children:get(7):text(),
+          endToEndReference = children:get(1):text(),
+          name = children:get(9):text() .. " " .. children:get(8):text(),
+          purpose = children:get(3):text()
         }
 
         -- separate booking text for refund requests
