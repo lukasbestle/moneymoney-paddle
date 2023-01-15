@@ -25,10 +25,10 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
-WebBanking{
+WebBanking {
   version     = 1.01,
   url         = "https://vendors.paddle.com/",
-  services    = {"Paddle"},
+  services    = { "Paddle" },
   description = string.format(
     MM.localizeText("Get balance and transactions for %s"),
     "Paddle"
@@ -50,11 +50,11 @@ local checkSession, groupTransactions, login, parseAmount, parseDate, startTime,
 
 -----------------------------------------------------------
 
-function SupportsBank (protocol, bankCode)
+function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Paddle"
 end
 
-function InitializeSession2 (protocol, bankCode, step, credentials, interactive)
+function InitializeSession2(protocol, bankCode, step, credentials, interactive)
   if step == 1 then
     -- if there's an existing connection, check if the session is still active
     if connection:getCookies() ~= "" and checkSession() then
@@ -66,22 +66,27 @@ function InitializeSession2 (protocol, bankCode, step, credentials, interactive)
     -- also keep the credentials in variables for the second step
     email    = credentials[1]
     password = credentials[2]
-    return login{email=email, password=password}
+    return login { email = email, password = password }
   elseif step == 2 then
     -- authenticate with the provided 2FA code
-    return login{email=email, password=password, code=credentials[1]}
+    return login { email = email, password = password, code = credentials[1] }
   end
 end
 
-function ListAccounts (knownAccounts)
+function ListAccounts(knownAccounts)
   -- request a month worth of transactions to ensure that there
   -- will be at least one even for smaller accounts;
   -- we only need the transaction for the account currency
   local startDate = os.date("%F", os.time() - 60 * 60 * 24 * 30)
   local endDate = os.date("%F")
 
-  local response = connection:get(url .. "report/balance?start_date=" .. startDate .. "&end_date=" .. endDate .. "&action=view")
-  local html     = HTML(response)
+  local response = connection:get(
+    url .. "report/balance" ..
+    "?start_date=" .. startDate ..
+    "&end_date=" .. endDate ..
+    "&action=view"
+  )
+  local html = HTML(response)
 
   return {
     {
@@ -95,7 +100,7 @@ function ListAccounts (knownAccounts)
   }
 end
 
-function RefreshAccount (account, since)
+function RefreshAccount(account, since)
   -- only return transactions if the mode was configured
   if not account.attributes.GroupTransactions then
     -- error message for the UI
@@ -124,7 +129,7 @@ function RefreshAccount (account, since)
 
     -- parse the raw HTML table into a transaction array
     html:xpath("//*[@id='vendor-main']/table/tbody/tr"):each(
-      function (_, element)
+      function(_, element)
         local children = element:children()
 
         -- either get the positive credit amount or the
@@ -152,7 +157,11 @@ function RefreshAccount (account, since)
         -- handle pending payouts if configured
         if transaction.bookingText == "PAYOUT" and (account.attributes.PendingPayouts or "true") == "true" then
           -- try to find a sent payout by the payout reference
-          local sentPayout = payoutsHtml:xpath("//*[@id='vendor-main']//strong[text()='" .. children:get(8):text() .. "']/ancestor::pui-tr")
+          local sentPayout = payoutsHtml:xpath(
+            "//*[@id='vendor-main']//strong[text()='" ..
+            children:get(8):text() ..
+            "']/ancestor::pui-tr"
+          )
 
           if sentPayout:length() >= 1 then
             -- payout is sent, set the payment date to make the history graph work correctly
@@ -181,7 +190,7 @@ function RefreshAccount (account, since)
   -- sort the transactions by booking date descending
   table.sort(
     transactions,
-    function (one, two)
+    function(one, two)
       return one.bookingDate > two.bookingDate
     end
   )
@@ -250,7 +259,7 @@ function RefreshAccount (account, since)
   }
 end
 
-function FetchStatements (accounts, knownIdentifiers)
+function FetchStatements(accounts, knownIdentifiers)
   local startDate = startTime(accounts[1], 0)
 
   local html = HTML(connection:get(url .. "payouts/sent"))
@@ -258,7 +267,7 @@ function FetchStatements (accounts, knownIdentifiers)
   -- collect all invoices from all matching payouts
   local invoices = {}
   html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(
-    function (_, row)
+    function(_, row)
       local children = row:children()
 
       local creationDate = parseDate(children:get(2):text())
@@ -269,7 +278,7 @@ function FetchStatements (accounts, knownIdentifiers)
 
       -- find all attachments of this payout
       row:xpath(".//pui-button"):each(
-        function (_, button)
+        function(_, button)
           local href = button:attr("href")
 
           local invoice = {
@@ -288,17 +297,17 @@ function FetchStatements (accounts, knownIdentifiers)
     end
   )
 
-  return {statements=invoices}
+  return { statements = invoices }
 end
 
-function EndSession ()
+function EndSession()
   -- don't perform a logout as the connection is cached
 end
 
 -----------------------------------------------------------
 
 -- Checks if the auth session is still active
-function checkSession ()
+function checkSession()
   local html = HTML(connection:get(url))
   return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
 end
@@ -306,7 +315,7 @@ end
 -- Reduces each group of transactions into one transaction,
 -- appends it to the target table and returns the total
 -- pending balance of the current day
-function groupTransactions (transactions, types, targetTable)
+function groupTransactions(transactions, types, targetTable)
   local pendingBalance = 0
 
   for bookingText, typeTransactions in pairs(transactions) do
@@ -343,7 +352,7 @@ function groupTransactions (transactions, types, targetTable)
 end
 
 -- Performs the login to the Paddle API
-function login (credentials)
+function login(credentials)
   -- always request a long session as we will cache it
   credentials.remember = true
 
@@ -354,7 +363,7 @@ function login (credentials)
     "https://api.paddle.com/login",
     requestBody,
     "application/json",
-    {Accept="application/json"}
+    { Accept = "application/json" }
   )
 
   -- check for auth errors
@@ -400,7 +409,7 @@ function login (credentials)
 end
 
 -- Extracts a number with optional decimals from a string
-function parseAmount (amount)
+function parseAmount(amount)
   -- extract the actual amount without currency and
   -- remove the thousand separators for number parsing
   amount = amount:match("([0-9.,]+)"):gsub(",", "")
@@ -410,20 +419,20 @@ end
 
 -- Extracts an ISO 8601 date (YYYY-MM-DD) from a string
 -- and converts it into a POSIX timestamp
-function parseDate (date)
+function parseDate(date)
   if not date then
     return nil
   end
 
   local datePattern = "(%d%d%d%d)%-(%d%d)%-(%d%d)"
   local year, month, day = date:match(datePattern)
-  return os.time{year=year, month=month, day=day}
+  return os.time { year = year, month = month, day = day }
 end
 
 -- Returns the provided POSIX timestamp,
 -- but limited to the minimum configured start date
 -- and at most one year ago
-function startTime (account, timestamp)
+function startTime(account, timestamp)
   local oneYearAgo = os.time() - 60 * 60 * 24 * 365
 
   return math.max(
@@ -435,7 +444,7 @@ end
 
 -- Returns the sum of a specific field of
 -- all elements of a table
-function tableSum (table, field)
+function tableSum(table, field)
   local sum = 0
 
   for _, value in pairs(table) do
