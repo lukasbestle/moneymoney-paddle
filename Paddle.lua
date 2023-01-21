@@ -55,7 +55,7 @@ local checkSession, groupTransactions, login, parseAmount, parseDate, startTime,
 ---
 ---@param protocol protocol Protocol of the bank gateway
 ---@param bankCode string Bank code or service name
----@return boolean | string `true` or the URL to the online banking entry page if the extension supports the bank, `false` otherwise
+---@return boolean | string # `true` or the URL to the online banking entry page if the extension supports the bank, `false` otherwise
 function SupportsBank(protocol, bankCode)
   return protocol == ProtocolWebBanking and bankCode == "Paddle"
 end
@@ -333,7 +333,7 @@ end
 
 ---**Performs the logout from the backend**
 ---
----@return string? # Optional error message
+---@return string? error Optional error message
 function EndSession()
   -- don't perform a logout as the connection is cached
 end
