@@ -25,23 +25,20 @@
 -- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 -- SOFTWARE.
 
-WebBanking {
-  version     = 1.01,
-  url         = "https://vendors.paddle.com/",
-  services    = { "Paddle" },
-  description = string.format(
-    MM.localizeText("Get balance and transactions for %s"),
-    "Paddle"
-  )
-}
+WebBanking({
+	version = 1.01,
+	url = "https://vendors.paddle.com/",
+	services = { "Paddle" },
+	description = string.format(MM.localizeText("Get balance and transactions for %s"), "Paddle"),
+})
 
 -- cache the connection object for future script executions
 local connection
 if LocalStorage.connection then
-  connection = LocalStorage.connection
+	connection = LocalStorage.connection
 else
-  connection = Connection()
-  LocalStorage.connection = connection
+	connection = Connection()
+	LocalStorage.connection = connection
 end
 
 -- define local variables and functions
@@ -57,7 +54,7 @@ local checkSession, groupTransactions, login, parseAmount, parseDate, startTime,
 ---@param bankCode string Bank code or service name
 ---@return boolean | string # `true` or the URL to the online banking entry page if the extension supports the bank, `false` otherwise
 function SupportsBank(protocol, bankCode)
-  return protocol == ProtocolWebBanking and bankCode == "Paddle"
+	return protocol == ProtocolWebBanking and bankCode == "Paddle"
 end
 
 ---**Performs the login to the backend with 2FA**
@@ -72,22 +69,22 @@ end
 ---@param interactive boolean If MoneyMoney is running in the foreground
 ---@return LoginChallenge | LoginFailed | string | nil # 2FA challenge or optional error message
 function InitializeSession2(protocol, bankCode, step, credentials, interactive)
-  if step == 1 then
-    -- if there's an existing connection, check if the session is still active
-    if connection:getCookies() ~= "" and checkSession() then
-      -- no login needed
-      return nil
-    end
+	if step == 1 then
+		-- if there's an existing connection, check if the session is still active
+		if connection:getCookies() ~= "" and checkSession() then
+			-- no login needed
+			return nil
+		end
 
-    -- no active session, authenticate with email and password;
-    -- also keep the credentials in variables for the second step
-    email    = credentials[1]
-    password = credentials[2]
-    return login { email = email, password = password }
-  elseif step == 2 then
-    -- authenticate with the provided 2FA code
-    return login { email = email, password = password, code = credentials[1] }
-  end
+		-- no active session, authenticate with email and password;
+		-- also keep the credentials in variables for the second step
+		email = credentials[1]
+		password = credentials[2]
+		return login({ email = email, password = password })
+	elseif step == 2 then
+		-- authenticate with the provided 2FA code
+		return login({ email = email, password = password, code = credentials[1] })
+	end
 end
 
 ---**Returns a list of accounts that can be refreshed with this extension**
@@ -95,30 +92,27 @@ end
 ---@param knownAccounts Account[] List of accounts that are already known via FinTS/HBCI
 ---@return NewAccount[] | string # List of accounts that can be requsted with web scraping or error message
 function ListAccounts(knownAccounts)
-  -- request a month worth of transactions to ensure that there
-  -- will be at least one even for smaller accounts;
-  -- we only need the transaction for the account currency
-  local startDate = os.date("%F", os.time() - 60 * 60 * 24 * 30)
-  local endDate = os.date("%F")
+	-- request a month worth of transactions to ensure that there
+	-- will be at least one even for smaller accounts;
+	-- we only need the transaction for the account currency
+	local startDate = os.date("%F", os.time() - 60 * 60 * 24 * 30)
+	local endDate = os.date("%F")
 
-  local response = connection:get(
-    url .. "report/balance" ..
-    "?start_date=" .. startDate ..
-    "&end_date=" .. endDate ..
-    "&action=view"
-  )
-  local html = HTML(response)
+	local response = connection:get(
+		url .. "report/balance" .. "?start_date=" .. startDate .. "&end_date=" .. endDate .. "&action=view"
+	)
+	local html = HTML(response)
 
-  return {
-    {
-      accountNumber = string.match(response, 'PaddleVars%.vendor = {"id":(%d+)'),
-      currency = html:xpath("//*[@id='vendor-main']//tbody/tr[1]/td[6]"):text(),
-      name = "Paddle",
-      portfolio = false,
-      owner = html:xpath("//*[@class='sb-header__vendor-name'][1]"):text(),
-      type = AccountTypeOther
-    }
-  }
+	return {
+		{
+			accountNumber = string.match(response, 'PaddleVars%.vendor = {"id":(%d+)'),
+			currency = html:xpath("//*[@id='vendor-main']//tbody/tr[1]/td[6]"):text(),
+			name = "Paddle",
+			portfolio = false,
+			owner = html:xpath("//*[@class='sb-header__vendor-name'][1]"):text(),
+			type = AccountTypeOther,
+		},
+	}
 end
 
 ---**Refreshes the balance and transaction of an account**
@@ -127,162 +121,160 @@ end
 ---@param since timestamp | nil POSIX timestamp of the oldest transaction to return or `nil` for portfolios
 ---@return AccountResults | string # Web scraping results or error message
 function RefreshAccount(account, since)
-  -- only return transactions if the mode was configured
-  if not account.attributes.GroupTransactions then
-    -- error message for the UI
-    return "The required user-defined field GroupTransactions was not configured, please refer to the README of the Paddle extension."
-  end
+	-- only return transactions if the mode was configured
+	if not account.attributes.GroupTransactions then
+		-- error message for the UI
+		return "The required user-defined field GroupTransactions was not configured, please refer to the README of the Paddle extension."
+	end
 
-  -- request the list of payouts if pending payouts are enabled
-  local payoutsHtml
-  if (account.attributes.PendingPayouts or "true") == "true" then
-    payoutsHtml = HTML(connection:get(url .. "payouts/sent"))
-  end
+	-- request the list of payouts if pending payouts are enabled
+	local payoutsHtml
+	if (account.attributes.PendingPayouts or "true") == "true" then
+		payoutsHtml = HTML(connection:get(url .. "payouts/sent"))
+	end
 
-  -- prepare the request for the first page of the balance report
-  local startDate = os.date("%F", startTime(account, since --[[@as integer]]))
-  local endDate = os.date("%F")
-  local url = url .. "report/balance?start_date=" .. startDate .. "&end_date=" .. endDate .. "&narrative=on&action=view"
+	-- prepare the request for the first page of the balance report
+	local startDate = os.date("%F", startTime(account, since --[[@as integer]]))
+	local endDate = os.date("%F")
+	local url = url
+		.. "report/balance?start_date="
+		.. startDate
+		.. "&end_date="
+		.. endDate
+		.. "&narrative=on&action=view"
 
-  local balance = 0
-  local html
-  local pendingBalance = 0
-  local transactions = {} --[=[@as NewTransaction[]]=]
+	local balance = 0
+	local html
+	local pendingBalance = 0
+	local transactions = {} --[=[@as NewTransaction[]]=]
 
-  -- follow the pagination links until there is none
-  repeat
-    html = HTML(connection:get(url))
+	-- follow the pagination links until there is none
+	repeat
+		html = HTML(connection:get(url))
 
-    -- parse the raw HTML table into a transaction array
-    html:xpath("//*[@id='vendor-main']/table/tbody/tr"):each(
-      function(_, element)
-        local children = element:children()
+		-- parse the raw HTML table into a transaction array
+		html:xpath("//*[@id='vendor-main']/table/tbody/tr"):each(function(_, element)
+			local children = element:children()
 
-        -- either get the positive credit amount or the
-        -- negative debit amount
-        local amount = parseAmount(children:get(5):text())
-        if amount == 0 then
-          amount = -parseAmount(children:get(4):text())
-        end
+			-- either get the positive credit amount or the
+			-- negative debit amount
+			local amount = parseAmount(children:get(5):text())
+			if amount == 0 then
+				amount = -parseAmount(children:get(4):text())
+			end
 
-        local transaction = {
-          amount = amount,
-          bookingDate = parseDate(children:get(10):text()),
-          bookingText = children:get(2):text(),
-          currency = children:get(7):text(),
-          endToEndReference = children:get(1):text(),
-          name = children:get(9):text() .. " " .. children:get(8):text(),
-          purpose = children:get(3):text()
-        }
+			local transaction = {
+				amount = amount,
+				bookingDate = parseDate(children:get(10):text()),
+				bookingText = children:get(2):text(),
+				currency = children:get(7):text(),
+				endToEndReference = children:get(1):text(),
+				name = children:get(9):text() .. " " .. children:get(8):text(),
+				purpose = children:get(3):text(),
+			}
 
-        -- separate booking text for refund requests
-        if transaction.purpose == "Refund Request Received" then
-          transaction.bookingText = "REFUND_REQUEST"
-        end
+			-- separate booking text for refund requests
+			if transaction.purpose == "Refund Request Received" then
+				transaction.bookingText = "REFUND_REQUEST"
+			end
 
-        -- handle pending payouts if configured
-        if transaction.bookingText == "PAYOUT" and (account.attributes.PendingPayouts or "true") == "true" then
-          -- try to find a sent payout by the payout reference
-          local sentPayout = payoutsHtml:xpath(
-            "//*[@id='vendor-main']//strong[text()='" ..
-            children:get(8):text() ..
-            "']/ancestor::pui-tr"
-          )
+			-- handle pending payouts if configured
+			if transaction.bookingText == "PAYOUT" and (account.attributes.PendingPayouts or "true") == "true" then
+				-- try to find a sent payout by the payout reference
+				local sentPayout = payoutsHtml:xpath(
+					"//*[@id='vendor-main']//strong[text()='" .. children:get(8):text() .. "']/ancestor::pui-tr"
+				)
 
-          if sentPayout:length() >= 1 then
-            -- payout is sent, set the payment date to make the history graph work correctly
-            transaction.bookingDate = parseDate(sentPayout:children():get(2):text())
-          else
-            -- payout is pending
-            transaction.booked = false
+				if sentPayout:length() >= 1 then
+					-- payout is sent, set the payment date to make the history graph work correctly
+					transaction.bookingDate = parseDate(sentPayout:children():get(2):text())
+				else
+					-- payout is pending
+					transaction.booked = false
 
-            -- fake the balance to account for the pending payout
-            -- (simulate that the payout is contained in the balance);
-            -- operators are swapped because the amount is negative
-            balance = balance - transaction.amount
-            pendingBalance = pendingBalance + transaction.amount
-          end
-        end
+					-- fake the balance to account for the pending payout
+					-- (simulate that the payout is contained in the balance);
+					-- operators are swapped because the amount is negative
+					balance = balance - transaction.amount
+					pendingBalance = pendingBalance + transaction.amount
+				end
+			end
 
-        table.insert(transactions, transaction)
-      end
-    )
+			table.insert(transactions, transaction)
+		end)
 
-    -- get the next URL or unset the URL if there is no next link
-    local nextLink = html:xpath("//*[@id='vendor-main']//*[@class='pagination']//a[@rel='next']")
-    url = nextLink:length() >= 1 and nextLink:attr("href") or ""
-  until not url or url == ""
+		-- get the next URL or unset the URL if there is no next link
+		local nextLink = html:xpath("//*[@id='vendor-main']//*[@class='pagination']//a[@rel='next']")
+		url = nextLink:length() >= 1 and nextLink:attr("href") or ""
+	until not url or url == ""
 
-  -- sort the transactions by booking date descending
-  table.sort(
-    transactions,
-    function(one, two)
-      return one.bookingDate > two.bookingDate
-    end
-  )
+	-- sort the transactions by booking date descending
+	table.sort(transactions, function(one, two)
+		return one.bookingDate > two.bookingDate
+	end)
 
-  -- group transactions of the same day if configured
-  local groupedTransactions = transactions --[=[@as NewTransaction[]]=]
-  if account.attributes.GroupTransactions == "true" then
-    -- reset the array and build it from scratch with groups
-    groupedTransactions = {} --[=[@as NewTransaction[]]=]
+	-- group transactions of the same day if configured
+	local groupedTransactions = transactions --[=[@as NewTransaction[]]=]
+	if account.attributes.GroupTransactions == "true" then
+		-- reset the array and build it from scratch with groups
+		groupedTransactions = {} --[=[@as NewTransaction[]]=]
 
-    -- the supported grouping types with human-readable label
-    -- (every transaction with different booking text is kept ungrouped)
-    local types = {
-      INVOICING = "invoicing payment",
-      ORDER = "order",
-      ORDER_UNDO_CHECKOUT = "checkout reversal",
-      REFUND = "refund",
-      REFUND_REQUEST = "refund request",
-      REFUND_REVERSAL = "refund reversal",
-      SUBSCRIPTION = "subscription",
-      SUB_PAY_REFUND = "subscription payment refund",
-      SUB_PAY_REFUND_REVERSAL = "subscription payment refund reversal"
-    }
+		-- the supported grouping types with human-readable label
+		-- (every transaction with different booking text is kept ungrouped)
+		local types = {
+			INVOICING = "invoicing payment",
+			ORDER = "order",
+			ORDER_UNDO_CHECKOUT = "checkout reversal",
+			REFUND = "refund",
+			REFUND_REQUEST = "refund request",
+			REFUND_REVERSAL = "refund reversal",
+			SUBSCRIPTION = "subscription",
+			SUB_PAY_REFUND = "subscription payment refund",
+			SUB_PAY_REFUND_REVERSAL = "subscription payment refund reversal",
+		}
 
-    local currentDate --[[@as timestamp]]
-    local currentTransactions = {} --[[@as table<string, table<integer, NewTransaction>>]]
+		local currentDate --[[@as timestamp]]
+		local currentTransactions = {} --[[@as table<string, table<integer, NewTransaction>>]]
 
-    for _, transaction in ipairs(transactions) do
-      local transactionDate = os.date("%F", transaction.bookingDate)
+		for _, transaction in ipairs(transactions) do
+			local transactionDate = os.date("%F", transaction.bookingDate)
 
-      -- if we have reached another day, group the transactions of the last day
-      if transactionDate ~= currentDate then
-        pendingBalance = pendingBalance + groupTransactions(currentTransactions, types, groupedTransactions)
+			-- if we have reached another day, group the transactions of the last day
+			if transactionDate ~= currentDate then
+				pendingBalance = pendingBalance + groupTransactions(currentTransactions, types, groupedTransactions)
 
-        -- reset the temporary variables
-        currentDate = transactionDate
-        currentTransactions = {}
-      end
+				-- reset the temporary variables
+				currentDate = transactionDate
+				currentTransactions = {}
+			end
 
-      if types[transaction.bookingText] then
-        -- groupable transaction
+			if types[transaction.bookingText] then
+				-- groupable transaction
 
-        -- initialize table if needed
-        if not currentTransactions[transaction.bookingText] then
-          currentTransactions[transaction.bookingText] = {}
-        end
+				-- initialize table if needed
+				if not currentTransactions[transaction.bookingText] then
+					currentTransactions[transaction.bookingText] = {}
+				end
 
-        table.insert(currentTransactions[transaction.bookingText], transaction)
-      else
-        -- ungroupable transaction, add directly
-        table.insert(groupedTransactions, transaction)
-      end
-    end
+				table.insert(currentTransactions[transaction.bookingText], transaction)
+			else
+				-- ungroupable transaction, add directly
+				table.insert(groupedTransactions, transaction)
+			end
+		end
 
-    -- create final groups for the last day in the transaction list
-    pendingBalance = pendingBalance + groupTransactions(currentTransactions, types, groupedTransactions)
-  end
+		-- create final groups for the last day in the transaction list
+		pendingBalance = pendingBalance + groupTransactions(currentTransactions, types, groupedTransactions)
+	end
 
-  -- add the actual reported balance to the fake payout balance offset
-  balance = balance + parseAmount(html:xpath("//*[@class='financial-stats']/*[@class='balance']"):text())
+	-- add the actual reported balance to the fake payout balance offset
+	balance = balance + parseAmount(html:xpath("//*[@class='financial-stats']/*[@class='balance']"):text())
 
-  return {
-    balance = balance,
-    pendingBalance = pendingBalance,
-    transactions = groupedTransactions
-  }
+	return {
+		balance = balance,
+		pendingBalance = pendingBalance,
+		transactions = groupedTransactions,
+	}
 end
 
 ---**Fetches PDF statements from the bank**
@@ -291,51 +283,47 @@ end
 ---@param knownIdentifiers string[] List of statement identifiers (`statement.identifier`) that have already been downloaded
 ---@return StatementResults | string # Downloaded statements or error message
 function FetchStatements(accounts, knownIdentifiers)
-  local startDate = startTime(accounts[1], 0)
+	local startDate = startTime(accounts[1], 0)
 
-  local html = HTML(connection:get(url .. "payouts/sent"))
+	local html = HTML(connection:get(url .. "payouts/sent"))
 
-  -- collect all invoices from all matching payouts
-  local invoices = {} --[=[@as NewStatement[]]=]
-  html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(
-    function(_, row)
-      local children = row:children()
+	-- collect all invoices from all matching payouts
+	local invoices = {} --[=[@as NewStatement[]]=]
+	html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(function(_, row)
+		local children = row:children()
 
-      local creationDate = parseDate(children:get(2):text())
-      if creationDate < startDate then
-        -- skip payouts before the start date
-        return
-      end
+		local creationDate = parseDate(children:get(2):text())
+		if creationDate < startDate then
+			-- skip payouts before the start date
+			return
+		end
 
-      -- find all attachments of this payout
-      row:xpath(".//pui-button"):each(
-        function(_, button)
-          local href = button:attr("href")
+		-- find all attachments of this payout
+		row:xpath(".//pui-button"):each(function(_, button)
+			local href = button:attr("href")
 
-          local invoice = {
-            creationDate = creationDate,
-            name = href:match("(%d+/[^/]+)$"):gsub("/", "_"),
-            identifier = href
-          }
+			local invoice = {
+				creationDate = creationDate,
+				name = href:match("(%d+/[^/]+)$"):gsub("/", "_"),
+				identifier = href,
+			}
 
-          -- only download the invoice if it wasn't already downloaded
-          if not knownIdentifiers[invoice.identifier] then
-            invoice.pdf, _, _, invoice.filename = connection:get(invoice.identifier)
-            table.insert(invoices, invoice)
-          end
-        end
-      )
-    end
-  )
+			-- only download the invoice if it wasn't already downloaded
+			if not knownIdentifiers[invoice.identifier] then
+				invoice.pdf, _, _, invoice.filename = connection:get(invoice.identifier)
+				table.insert(invoices, invoice)
+			end
+		end)
+	end)
 
-  return { statements = invoices }
+	return { statements = invoices }
 end
 
 ---**Performs the logout from the backend**
 ---
 ---@return string? error Optional error message
 function EndSession()
-  -- don't perform a logout as the connection is cached
+	-- don't perform a logout as the connection is cached
 end
 
 -----------------------------------------------------------
@@ -344,8 +332,8 @@ end
 ---
 ---@return boolean
 function checkSession()
-  local html = HTML(connection:get(url --[[@as string]]))
-  return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
+	local html = HTML(connection:get(url --[[@as string]]))
+	return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
 end
 
 ---**Reduces each group of transactions into one transaction**
@@ -357,39 +345,39 @@ end
 ---@param targetTable table<integer, NewTransaction> Table to insert the generated transactions to
 ---@return number pendingBalance Pending balance of the processed transactions
 function groupTransactions(transactions, types, targetTable)
-  local pendingBalance = 0
+	local pendingBalance = 0
 
-  for bookingText, typeTransactions in pairs(transactions) do
-    local groupName = types[bookingText]
+	for bookingText, typeTransactions in pairs(transactions) do
+		local groupName = types[bookingText]
 
-    -- append plural s if there are multiple transactions
-    if #typeTransactions > 1 then
-      groupName = groupName .. "s"
-    end
+		-- append plural s if there are multiple transactions
+		if #typeTransactions > 1 then
+			groupName = groupName .. "s"
+		end
 
-    local amount = tableSum(typeTransactions, "amount")
-    local bookingDate = typeTransactions[1].bookingDate
-    local currency = typeTransactions[1].currency
+		local amount = tableSum(typeTransactions, "amount")
+		local bookingDate = typeTransactions[1].bookingDate
+		local currency = typeTransactions[1].currency
 
-    -- mark transactions of the current day as pending
-    local booked = os.date("%F", bookingDate) ~= os.date("%F")
+		-- mark transactions of the current day as pending
+		local booked = os.date("%F", bookingDate) ~= os.date("%F")
 
-    table.insert(targetTable, {
-      name = #typeTransactions .. " " .. groupName,
-      amount = amount,
-      currency = currency,
-      bookingDate = bookingDate,
-      purpose = "Average: " .. string.format("%.2f", amount / #typeTransactions) .. " " .. currency,
-      bookingText = bookingText,
-      booked = booked
-    })
+		table.insert(targetTable, {
+			name = #typeTransactions .. " " .. groupName,
+			amount = amount,
+			currency = currency,
+			bookingDate = bookingDate,
+			purpose = "Average: " .. string.format("%.2f", amount / #typeTransactions) .. " " .. currency,
+			bookingText = bookingText,
+			booked = booked,
+		})
 
-    if booked == false then
-      pendingBalance = pendingBalance + amount
-    end
-  end
+		if booked == false then
+			pendingBalance = pendingBalance + amount
+		end
+	end
 
-  return pendingBalance
+	return pendingBalance
 end
 
 ---**Performs the login to the Paddle API**
@@ -397,59 +385,59 @@ end
 ---@param credentials { email: string, password: string, code?: string }
 ---@return LoginChallenge | LoginFailed | string | nil # 2FA challenge or optional error message
 function login(credentials)
-  -- always request a long session as we will cache it
-  credentials.remember = true
+	-- always request a long session as we will cache it
+	credentials.remember = true
 
-  -- first authenticate to the API, which sets a cookie
-  local requestBody = JSON():set(credentials):json()
-  local responseBody = connection:request(
-    "POST",
-    "https://api.paddle.com/login",
-    requestBody,
-    "application/json",
-    { Accept = "application/json" }
-  )
+	-- first authenticate to the API, which sets a cookie
+	local requestBody = JSON():set(credentials):json()
+	local responseBody = connection:request(
+		"POST",
+		"https://api.paddle.com/login",
+		requestBody,
+		"application/json",
+		{ Accept = "application/json" }
+	)
 
-  -- check for auth errors
-  local responseData = JSON(responseBody):dictionary()
-  if responseData.error then
-    local errorData = responseData.error
+	-- check for auth errors
+	local responseData = JSON(responseBody):dictionary()
+	if responseData.error then
+		local errorData = responseData.error
 
-    -- invalid credentials
-    if errorData.code == "forbidden.invalid_credentials" then
-      return LoginFailed
-    end
+		-- invalid credentials
+		if errorData.code == "forbidden.invalid_credentials" then
+			return LoginFailed
+		end
 
-    -- account with enabled 2FA
-    if errorData.code == "forbidden.2fa.missing" then
-      -- ask the user for the TOTP code
-      return {
-        title = MM.localizeText("Two-Factor Authentication"),
-        challenge = MM.localizeText("Please enter the code from your mobile phone."),
-        label = MM.localizeText("6-digit code")
-      }
-    end
+		-- account with enabled 2FA
+		if errorData.code == "forbidden.2fa.missing" then
+			-- ask the user for the TOTP code
+			return {
+				title = MM.localizeText("Two-Factor Authentication"),
+				challenge = MM.localizeText("Please enter the code from your mobile phone."),
+				label = MM.localizeText("6-digit code"),
+			}
+		end
 
-    -- other error, return full error
-    return string.format(
-      MM.localizeText("The web server %s responded with the error message:\n»%s«\nPlease try again later."),
-      "api.paddle.com",
-      errorData.status .. ": " .. errorData.code
-    )
-  end
+		-- other error, return full error
+		return string.format(
+			MM.localizeText("The web server %s responded with the error message:\n»%s«\nPlease try again later."),
+			"api.paddle.com",
+			errorData.status .. ": " .. errorData.code
+		)
+	end
 
-  -- first authentication step (API) has succeeded;
-  -- try to request the UI, which redirects a bunch,
-  -- does OAuth magic and sets even more cookies;
-  -- at the same time this ensures that the login
-  -- actually worked
-  if checkSession() ~= true then
-    -- credentials were correct, but the login still failed for some reason
-    return MM.localizeText("The server responded with an internal error. Please try again later.")
-  end
+	-- first authentication step (API) has succeeded;
+	-- try to request the UI, which redirects a bunch,
+	-- does OAuth magic and sets even more cookies;
+	-- at the same time this ensures that the login
+	-- actually worked
+	if checkSession() ~= true then
+		-- credentials were correct, but the login still failed for some reason
+		return MM.localizeText("The server responded with an internal error. Please try again later.")
+	end
 
-  -- no error, success
-  return nil
+	-- no error, success
+	return nil
 end
 
 ---**Extracts a number with optional decimals from a string**
@@ -457,11 +445,11 @@ end
 ---@param amount string
 ---@return number? string
 function parseAmount(amount)
-  -- extract the actual amount without currency and
-  -- remove the thousand separators for number parsing
-  amount = amount:match("([0-9.,]+)"):gsub(",", "")
+	-- extract the actual amount without currency and
+	-- remove the thousand separators for number parsing
+	amount = amount:match("([0-9.,]+)"):gsub(",", "")
 
-  return tonumber(amount)
+	return tonumber(amount)
 end
 
 ---**Extracts an ISO 8601 date (YYYY-MM-DD) from a string
@@ -470,13 +458,13 @@ end
 ---@param date string?
 ---@return timestamp?
 function parseDate(date)
-  if not date then
-    return nil
-  end
+	if not date then
+		return nil
+	end
 
-  local datePattern = "(%d%d%d%d)%-(%d%d)%-(%d%d)"
-  local year, month, day = date:match(datePattern)
-  return os.time { year = year, month = month, day = day }
+	local datePattern = "(%d%d%d%d)%-(%d%d)%-(%d%d)"
+	local year, month, day = date:match(datePattern)
+	return os.time({ year = year, month = month, day = day })
 end
 
 ---**Determines the refresh start time based on the configuration**
@@ -489,13 +477,9 @@ end
 ---@param timestamp timestamp
 ---@return timestamp
 function startTime(account, timestamp)
-  local oneYearAgo = os.time() - 60 * 60 * 24 * 365
+	local oneYearAgo = os.time() - 60 * 60 * 24 * 365
 
-  return math.max(
-    timestamp,
-    parseDate(account.attributes.StartDate) or 0,
-    oneYearAgo
-  )
+	return math.max(timestamp, parseDate(account.attributes.StartDate) or 0, oneYearAgo)
 end
 
 ---**Returns the sum of a specific field of
@@ -505,11 +489,11 @@ end
 ---@param field string
 ---@return number
 function tableSum(table, field)
-  local sum = 0
+	local sum = 0
 
-  for _, value in pairs(table) do
-    sum = sum + value[field]
-  end
+	for _, value in pairs(table) do
+		sum = sum + value[field]
+	end
 
-  return sum
+	return sum
 end
