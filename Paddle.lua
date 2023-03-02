@@ -44,7 +44,7 @@ end
 -- define local variables and functions
 ---@type string, string
 local email, password
-local checkSession, groupTransactions, login, parseAmount, parseDate, startTime, tableSum
+local checkSession, groupTransactions, localizeText, login, parseAmount, parseDate, startTime, tableSum
 
 -----------------------------------------------------------
 
@@ -124,7 +124,10 @@ function RefreshAccount(account, since)
 	-- only return transactions if the mode was configured
 	if not account.attributes.GroupTransactions then
 		-- error message for the UI
-		return "The required user-defined field GroupTransactions was not configured, please refer to the README of the Paddle extension."
+		return localizeText(
+			'The required user-defined field "GroupTransactions" was not configured, please refer to the README of the Paddle extension.',
+			'Das notwendige benutzerdefinierte Feld "GroupTransactions" wurde nicht konfiguriert, bitte lese die README der Paddle-Erweiterung.'
+		)
 	end
 
 	-- request the list of payouts if pending payouts are enabled
@@ -380,6 +383,14 @@ function groupTransactions(transactions, types, targetTable)
 	return pendingBalance
 end
 
+---Returns the string in the current UI language
+---
+---@param en string English text
+---@param de string German text
+function localizeText(en, de)
+	return MM.language == "de" and de or en
+end
+
 ---**Performs the login to the Paddle API**
 ---
 ---@param credentials { email: string, password: string, code?: string }
@@ -413,7 +424,7 @@ function login(credentials)
 			-- ask the user for the TOTP code
 			return {
 				title = MM.localizeText("Two-Factor Authentication"),
-				challenge = MM.localizeText("Please enter the code from your mobile phone."),
+				challenge = localizeText("Please enter your TOTP code.", "Bitte gebe deinen TOTP-Code ein."),
 				label = MM.localizeText("6-digit code"),
 			}
 		end
@@ -433,7 +444,10 @@ function login(credentials)
 	-- actually worked
 	if checkSession() ~= true then
 		-- credentials were correct, but the login still failed for some reason
-		return MM.localizeText("The server responded with an internal error. Please try again later.")
+		return localizeText(
+			"Login succeeded, however the Paddle backend could not be fully loaded. Please try again later.",
+			"Der Login war erfolgreich, aber das Paddle-Backend konnte nicht vollständig geladen werden. Bitte versuche es später erneut."
+		)
 	end
 
 	-- no error, success
