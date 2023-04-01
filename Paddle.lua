@@ -195,6 +195,11 @@ function RefreshAccount(account, since)
 					-- payout is pending
 					transaction.booked = false
 
+					-- display the transaction on the current day because
+					-- the actual booking date is still in the future
+					-- (avoids a jump in the graph once the payout gets sent)
+					transaction.bookingDate = os.time()
+
 					-- fake the balance to account for the pending payout
 					-- (simulate that the payout is contained in the balance);
 					-- operators are swapped because the amount is negative
