@@ -35,7 +35,7 @@ WebBanking({
 -- cache the connection object for future script executions
 local connection
 if LocalStorage.connection then
-	connection = LocalStorage.connection
+	connection = LocalStorage.connection --[[@as Connection]]
 else
 	connection = Connection()
 	LocalStorage.connection = connection
