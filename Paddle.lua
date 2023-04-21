@@ -293,10 +293,10 @@ end
 function FetchStatements(accounts, knownIdentifiers)
 	local startDate = startTime(accounts[1], 0)
 
-	local html = HTML(connection:get(url .. "payouts/sent"))
+	local statements = {} --[=[@as NewStatement[]]=]
 
 	-- collect all invoices from all matching payouts
-	local invoices = {} --[=[@as NewStatement[]]=]
+	local html = HTML(connection:get(url .. "payouts/sent"))
 	html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(function(_, row)
 		local children = row:children()
 
@@ -319,12 +319,48 @@ function FetchStatements(accounts, knownIdentifiers)
 			-- only download the invoice if it wasn't already downloaded
 			if not knownIdentifiers[invoice.identifier] then
 				invoice.pdf, _, _, invoice.filename = connection:get(invoice.identifier)
-				table.insert(invoices, invoice)
+				table.insert(statements, invoice)
 			end
 		end)
 	end)
 
-	return { statements = invoices }
+	-- collect all statements of all matching months
+	html = HTML(connection:get(url .. "payouts/monthly-statements"))
+	html:xpath("//*[@id='vendor-main']//pui-tbody//pui-tr"):each(function(_, row)
+		local children = row:children()
+
+		-- the date on the page is the day the month starts, but the
+		-- statements are created at the end of the month, so we need to
+		-- calculate the last day by adding a month and subtracting a day
+		local statementDate = parseDate(children:get(2):text())
+		local creationDate = os.time({
+			year = os.date("%Y", statementDate) + 0, -- convert to number
+			month = os.date("%m", statementDate) + 1,
+			day = 1,
+		}) - 86400
+
+		if creationDate < startDate then
+			-- skip statements of months that ended before the start date
+			return
+		end
+
+		-- find the URL to the statement PDF in the button
+		local href = children:get(3):children():get(1):attr("href")
+
+		local statement = {
+			creationDate = creationDate,
+			name = os.date("%Y-%m", creationDate) .. " " .. href:match("(%a+)/%d+/%d+$"),
+			identifier = href,
+		}
+
+		-- only download the statement if it wasn't already downloaded
+		if not knownIdentifiers[statement.identifier] then
+			statement.pdf, _, _, statement.filename = connection:get(statement.identifier)
+			table.insert(statements, statement)
+		end
+	end)
+
+	return { statements = statements }
 end
 
 ---**Performs the logout from the backend**
