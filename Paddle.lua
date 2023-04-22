@@ -309,16 +309,19 @@ function FetchStatements(accounts, knownIdentifiers)
         -- find all attachments of this payout
         row:xpath(".//pui-button"):each(function(_, button)
             local href = button:attr("href")
+            local name = href:match("(%d+/[^/]+)$"):gsub("/", "_")
 
             local invoice = {
                 creationDate = creationDate,
-                name = href:match("(%d+/[^/]+)$"):gsub("/", "_"),
-                identifier = href,
+                name = name,
+                identifier = accounts[1].accountNumber .. "/" .. name,
             }
 
-            -- only download the invoice if it wasn't already downloaded
-            if not knownIdentifiers[invoice.identifier] then
-                invoice.pdf, _, _, invoice.filename = connection:get(invoice.identifier)
+            -- only download the invoice if it wasn't already downloaded;
+            -- also check for the href that was used as identifier until
+            -- version 1.02 of this extension (avoids duplicate downloads)
+            if not knownIdentifiers[invoice.identifier] and not knownIdentifiers[href] then
+                invoice.pdf, _, _, invoice.filename = connection:get(href)
                 table.insert(statements, invoice)
             end
         end)
@@ -345,17 +348,19 @@ function FetchStatements(accounts, knownIdentifiers)
         end
 
         -- find the URL to the statement PDF in the button
+        -- and use the currency from it for the name
         local href = children:get(3):children():get(1):attr("href")
+        local name = os.date("%Y-%m", creationDate) .. " " .. href:match("(%a+)/%d+/%d+$")
 
         local statement = {
             creationDate = creationDate,
-            name = os.date("%Y-%m", creationDate) .. " " .. href:match("(%a+)/%d+/%d+$"),
-            identifier = href,
+            name = name,
+            identifier = accounts[1].accountNumber .. "/" .. name,
         }
 
         -- only download the statement if it wasn't already downloaded
         if not knownIdentifiers[statement.identifier] then
-            statement.pdf, _, _, statement.filename = connection:get(statement.identifier)
+            statement.pdf, _, _, statement.filename = connection:get(href)
             table.insert(statements, statement)
         end
     end)
