@@ -1,6 +1,6 @@
 # Paddle extension for MoneyMoney
 
-This extension for [MoneyMoney](https://moneymoney-app.com/) retrieves the balance and transactions of [Paddle](https://www.paddle.com) vendor accounts and optionally downloads the payout invoices to the MoneyMoney statements view.
+This extension for [MoneyMoney](https://moneymoney-app.com/) retrieves the balance and transactions of [Paddle](https://www.paddle.com) vendor accounts and optionally downloads the payout invoices and monthly statements to the MoneyMoney statements view.
 
 ## How to use
 
@@ -21,9 +21,9 @@ To set the options, right-click on your Paddle account in the MoneyMoney sidebar
 
 The `GroupTransactions` option is required, the other options are optional (see below). Please set the options you like, confirm the settings dialog and manually refresh your account.
 
-### Setup invoice downloads
+### Setup invoice and statement downloads
 
-If you want MoneyMoney to automatically download your Paddle invoices from your configured start date, please open the MoneyMoney statements settings and enable the toggle for your Paddle account. MoneyMoney will automatically download your invoices immediately.
+If you want MoneyMoney to automatically download your Paddle invoices and statements from your configured start date, please open the MoneyMoney statements settings and enable the toggle for your Paddle account. MoneyMoney will automatically download your invoices and statements immediately.
 
 ## Options
 
