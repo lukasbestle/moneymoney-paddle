@@ -26,7 +26,7 @@
 -- SOFTWARE.
 
 WebBanking({
-    version = 1.02,
+    version = 1.03,
     url = "https://vendors.paddle.com/",
     services = { "Paddle" },
     description = string.format(MM.localizeText("Get balance and transactions for %s"), "Paddle"),
