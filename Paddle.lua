@@ -92,24 +92,15 @@ end
 ---@param knownAccounts Account[] List of accounts that are already known via FinTS/HBCI
 ---@return NewAccount[] | string # List of accounts that can be requsted with web scraping or error message
 function ListAccounts(knownAccounts)
-    -- request a month worth of transactions to ensure that there
-    -- will be at least one even for smaller accounts;
-    -- we only need the transaction for the account currency
-    local startDate = os.date("%F", os.time() - 60 * 60 * 24 * 30)
-    local endDate = os.date("%F")
-
-    local response = connection:get(
-        url .. "report/balance" .. "?start_date=" .. startDate .. "&end_date=" .. endDate .. "&action=view"
-    )
-    local html = HTML(response)
+    local response = connection:get(url .. "overview")
 
     return {
         {
             accountNumber = string.match(response, 'PaddleVars%.vendor = {"id":(%d+)'),
-            currency = html:xpath("//*[@id='vendor-main']//tbody/tr[1]/td[6]"):text(),
+            currency = string.match(response, "currencyCode\\u0022:\\u0022(%u+)"),
             name = "Paddle",
             portfolio = false,
-            owner = html:xpath("//*[@class='sb-header__vendor-name'][1]"):text(),
+            owner = string.match(response, 'PaddleVars%.vendor = {"id":%d+,"name":"([^"]+)"'),
             type = AccountTypeOther,
         },
     }
@@ -147,13 +138,15 @@ function RefreshAccount(account, since)
         .. "&narrative=on&action=view"
 
     local balance = 0
+    local response
     local html
     local pendingBalance = 0
     local transactions = {} --[=[@as NewTransaction[]]=]
 
     -- follow the pagination links until there is none
     repeat
-        html = HTML(connection:get(url))
+        response = connection:get(url)
+        html = HTML(response)
 
         -- parse the raw HTML table into a transaction array
         html:xpath("//*[@id='vendor-main']/table/tbody/tr"):each(function(_, element)
@@ -276,7 +269,7 @@ function RefreshAccount(account, since)
     end
 
     -- add the actual reported balance to the fake payout balance offset
-    balance = balance + parseAmount(html:xpath("//*[@class='financial-stats']/*[@class='balance']"):text())
+    balance = balance + string.match(response, "balance\\u0022:(%d+)") / 100
 
     return {
         balance = balance,
@@ -381,8 +374,8 @@ end
 ---
 ---@return boolean
 function checkSession()
-    local html = HTML(connection:get(url --[[@as string]]))
-    return html:xpath("//*[@class='sb-header__vendor-name']"):length() >= 1
+    local response = connection:get(url --[[@as string]])
+    return string.find(response, "PaddleVars.vendor = {", 0, true) ~= nil
 end
 
 ---**Reduces each group of transactions into one transaction**
